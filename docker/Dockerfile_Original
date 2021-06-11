@@ -25,7 +25,6 @@ ARG DEBIAN_FRONTEND=noninteractive
 # todo: minimize this even more
 RUN apt-get update -qq &&\
     apt-get install -qq curl &&\
-    apt-get install -qq wget &&\
     apt-get install -qq --no-install-recommends \
         libopenblas-dev liblapack-dev \
         libavcodec-dev libavformat-dev libswscale-dev \
@@ -86,7 +85,7 @@ RUN curl https://github.com/opencv/opencv/archive/${OPENCV_VERSION}.tar.gz -LO &
 FROM cv_deps as openface
 WORKDIR /root/openface
 
-COPY ./OpenFace/ ./
+COPY ./ ./
 
 COPY --from=model_data /data/patch_experts/* \
     /root/openface/lib/local/LandmarkDetector/model/patch_experts/
@@ -109,31 +108,3 @@ COPY --from=openface /root/diff /
 
 # Since we "imported" the build artifacts, we need to reconfigure ld
 RUN ldconfig
-
-## ==================== Flamingo Set Up ===========================
-
-# Setting up non-interactive env stuff
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-
-ENV CONDA_ROOT /opt/miniconda
-ENV CONDA_ENV_NAME flamingo-fer
-ENV PATH ${CONDA_ROOT}/envs/${CONDA_ENV_NAME}/bin:${CONDA_ROOT}/bin:${PATH}
-
-RUN wget -q http://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
-RUN bash Miniconda3-latest-Linux-x86_64.sh -p $CONDA_ROOT -b
-RUN rm Miniconda3-latest-Linux-x86_64.sh
-RUN conda update -y conda
-
-ADD configs/environment.yml /tmp
-RUN conda env create -f /tmp/environment.yml -n $CONDA_ENV_NAME python=3.8
-RUN echo "source activate ${CONDA_ENV_NAME}" > ~/.bashrc
-
-SHELL ["conda", "run", "--no-capture-output", "-n", "flamingo-fer", "/bin/bash", "-c"]
-
-# ML Related preloading
-RUN python -c "import nltk; nltk.download(\"punkt\")"
-RUN python -c "import nltk; nltk.download(\"stopwords\")"
-RUN python -c "from transformers import AutoModelForSequenceClassification; \
-               AutoModelForSequenceClassification.from_pretrained(\"facebook/bart-large-mnli\")"
-RUN python -c "from transformers import AutoTokenizer; \
-               AutoTokenizer.from_pretrained(\"facebook/bart-large-mnli\")"
